@@ -1,45 +1,67 @@
 
-name: Export IPTV Tools (Enterprise)
+name: Export IPTV Tools (Enterprise, CDN + Release)
 
 on:
   schedule:
-    # 每天北京时间 02:00（UTC 18:00）
+    # 北京时间 02:00（UTC 18:00）
     - cron: '0 18 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write   # 允许写回仓库（提交cdn产物）
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Prepare tools
+      - name: Collect tools
         run: |
-          mkdir -p out
+          rm -rf out && mkdir out
           cp -r 工具/tools/* out/
 
-      - name: Create archive
+      - name: Create zip
         run: |
           cd out
           zip -r tools.zip .
 
-      - name: Generate checksum
+      - name: Generate sha256
         run: |
           cd out
           sha256sum tools.zip > tools.zip.sha256
 
-      - name: Publish release
-        uses: softprops/action-gh-release@v1
+      # —— 发布到 Release（latest），保留你已有的链路 ——
+      - name: Publish Release (latest)
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: IPTV Tools (Latest)
-          body: |
-            Automated nightly build.
-            Generated at: ${{ github.run_started_at }}
           files: |
             out/tools.zip
             out/tools.zip.sha256
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # —— 同步到仓库的 cdn/ 目录，用于 jsDelivr CDN 拉取 ——
+      - name: Sync artifacts to repo (cdn/)
+        run: |
+          mkdir -p cdn
+          cp out/tools.zip cdn/tools.zip
+          cp out/tools.zip.sha256 cdn/tools.zip.sha256
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add cdn/tools.zip cdn/tools.zip.sha256
+          # 只在内容变化时提交，避免无意义提交
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(cdn): update tools.zip ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+``
