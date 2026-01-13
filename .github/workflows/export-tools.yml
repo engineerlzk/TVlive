@@ -1,0 +1,45 @@
+
+name: Export IPTV Tools (Enterprise)
+
+on:
+  schedule:
+    # 每天北京时间 02:00（UTC 18:00）
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare tools
+        run: |
+          mkdir -p out
+          cp -r 工具/tools/* out/
+
+      - name: Create archive
+        run: |
+          cd out
+          zip -r tools.zip .
+
+      - name: Generate checksum
+        run: |
+          cd out
+          sha256sum tools.zip > tools.zip.sha256
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: IPTV Tools (Latest)
+          body: |
+            Automated nightly build.
+            Generated at: ${{ github.run_started_at }}
+          files: |
+            out/tools.zip
+            out/tools.zip.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
