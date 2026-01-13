@@ -1,3 +1,4 @@
+
 name: Export IPTV Tools (Enterprise, CDN + Release)
 
 on:
@@ -6,33 +7,39 @@ on:
     - cron: '0 18 * * *'
   workflow_dispatch:
 
+# 顶层权限：允许写 release 与提交到仓库
 permissions:
-  contents: write   # 允许写回仓库（提交cdn产物）
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) 检出代码（默认分支）
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 1
 
+      # 2) 收集 tools（中文路径保持一致）
       - name: Collect tools
         run: |
           rm -rf out && mkdir out
           cp -r 工具/tools/* out/
 
+      # 3) 打包与校验值
       - name: Create zip
         run: |
           cd out
           zip -r tools.zip .
-
       - name: Generate sha256
         run: |
           cd out
           sha256sum tools.zip > tools.zip.sha256
 
-      # —— 发布到 Release（latest），保留你已有的链路 ——
+      # 4) 发布到 Release（latest）
       - name: Publish Release (latest)
         uses: softprops/action-gh-release@v2
         with:
@@ -45,7 +52,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # —— 同步到仓库的 cdn/ 目录，用于 jsDelivr CDN 拉取 ——
+      # 5) 同步到仓库 cdn/ 目录（便于 jsDelivr CDN 下载）
       - name: Sync artifacts to repo (cdn/)
         run: |
           mkdir -p cdn
@@ -56,11 +63,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add cdn/tools.zip cdn/tools.zip.sha256
-          # 只在内容变化时提交，避免无意义提交
+
+          # 仅在内容变化时提交
           if ! git diff --cached --quiet; then
             git commit -m "chore(cdn): update tools.zip ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
             git push
           else
             echo "No changes to commit."
           fi
-``
